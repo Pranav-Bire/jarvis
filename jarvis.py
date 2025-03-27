@@ -16,6 +16,8 @@ from gtts import gTTS
 import tempfile
 import uuid
 import subprocess
+import io
+from pygame import mixer
 
 # Load environment variables
 load_dotenv()
@@ -38,6 +40,9 @@ class Jarvis:
         self.recognizer = sr.Recognizer()
         self.language = "en-in"  # Default language is English (India)
         self.temp_dir = tempfile.gettempdir()
+        
+        # Initialize pygame mixer for Marathi audio playback
+        mixer.init()
         
         # Conversation history for context
         self.conversation_history = []
@@ -110,33 +115,30 @@ class Jarvis:
         if self.language == "mr-IN":
             # Use Google Text-to-Speech for Marathi
             try:
-                # Create unique filename for the audio file (with simple name to avoid path issues)
+                # Create unique filename for the audio file
                 temp_dir = os.path.join(tempfile.gettempdir(), 'jarvis_audio')
                 os.makedirs(temp_dir, exist_ok=True)
-                simple_filename = os.path.join(temp_dir, f"speech_{uuid.uuid4().hex[:8]}.mp3")
+                mp3_file = os.path.join(temp_dir, f"speech_{uuid.uuid4().hex[:8]}.mp3")
                 
                 # Generate Marathi speech
                 tts = gTTS(text=text, lang='mr', slow=False)
-                tts.save(simple_filename)
+                tts.save(mp3_file)
                 
-                # Play the audio using system default player to avoid playsound issues
-                if os.name == 'nt':  
-                    os.system(f'start "" "{simple_filename}"')
-                elif os.name == 'posix':  
-                    os.system(f'open "{simple_filename}" || xdg-open "{simple_filename}"')
+                # Play the audio using pygame mixer (no media player window)
+                mixer.music.load(mp3_file)
+                mixer.music.play()
                 
-                # Give time for audio to play (approximate based on text length)
-                wait_time = len(text) * 0.05  # 50ms per character
-                time.sleep(max(wait_time, 2))  # At least 2 seconds
+                # Wait for audio to finish playing
+                while mixer.music.get_busy():
+                    time.sleep(0.1)
                 
-                # Clean up the temporary file after waiting
+                # Clean up the temporary file
                 try:
-                    # First wait to make sure file isn't in use
-                    time.sleep(1)
-                    if os.path.exists(simple_filename):
-                        os.remove(simple_filename)
+                    if os.path.exists(mp3_file):
+                        os.remove(mp3_file)
                 except Exception as cleanup_error:
                     print(f"Warning: Could not remove temp file: {cleanup_error}")
+                    
             except Exception as e:
                 print(f"Error with Marathi TTS: {str(e)}. Falling back to English.")
                 # Fallback to English
@@ -208,21 +210,39 @@ class Jarvis:
             if "english" in detection_text and target_language == "en":
                 return text
                 
-            # If Marathi is detected and target is Marathi, return as is
+            # If Marathi is detected, return as is
             if "marathi" in detection_text and target_language == "mr":
                 return text
                 
-            # Otherwise translate
+            # Create a translation prompt based on target language
             if target_language == "en":
-                translate_prompt = f"Translate this text from Marathi to English: '{text}'"
-            else:
-                translate_prompt = f"Translate this text from English to Marathi: '{text}'"
+                translation_prompt = f"Translate the following Marathi text to English: '{text}'"
+            else:  # target_language == "mr"
+                translation_prompt = f"Translate the following English text to Marathi. Return ONLY the Marathi translation without any explanation, notes, or English text: '{text}'"
                 
-            translation = genai.GenerativeModel('models/gemini-1.5-flash').generate_content(translate_prompt)
+            translation = genai.GenerativeModel('models/gemini-1.5-flash').generate_content(translation_prompt)
+            
+            # For Marathi translation, clean up any explanations or English text
+            if target_language == "mr":
+                # Extract only the Marathi text (usually appears before any English explanation)
+                translation_text = translation.text
+                
+               
+                import re
+                matches = re.search(r'[^\u0900-\u097F\s.,!?]{4,}', translation_text)
+                if matches:
+                    # Get position of the first Latin character sequence
+                    position = matches.start()
+                    # Return only the Marathi part
+                    translation_text = translation_text[:position].strip()
+                
+                return translation_text
+            
             return translation.text
+            
         except Exception as e:
             print(f"Translation error: {str(e)}")
-            return text
+            return text  # Return original text on error
 
     def is_restricted_query(self, query):
         """Check if the query contains restricted topics."""
