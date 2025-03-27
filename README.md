@@ -33,7 +33,6 @@ A voice-controlled AI assistant inspired by Iron Man's JARVIS, powered by Google
    ```
    python jarvis.py
    ```
-   or
 
 
 ## Usage
