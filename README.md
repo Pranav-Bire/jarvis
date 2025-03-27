@@ -31,12 +31,10 @@ A voice-controlled AI assistant inspired by Iron Man's JARVIS, powered by Google
 
 4. **Run the assistant**
    ```
-   python main.py
+   python jarvis.py
    ```
    or
-   ```
-   python voice_assistant.py
-   ```
+
 
 ## Usage
 
@@ -56,7 +54,7 @@ A voice-controlled AI assistant inspired by Iron Man's JARVIS, powered by Google
 
 ## Project Structure
 
-- `main.py`: Main application with combined functionality
+- `jarvis.py`: Main application with combined functionality
 - `voice_assistant.py`: Standalone voice assistant with Gemini integration
 - `gemini_handler.py`: Handles interactions with the Gemini LLM
 - `model_train.py`: Script to train the intent classification model
